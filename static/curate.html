@@ -160,6 +160,30 @@
         .mask-overlay:hover { background: rgba(0, 242, 254, 0.4); border-color: var(--grad-start); }
         .mask-overlay.selected { background: rgba(79, 172, 254, 0.4); border-color: var(--grad-end); }
         
+
+        /* Upload Overlay */
+        #upload-overlay {
+            position: fixed; inset: 0; background: var(--bg-main);
+            z-index: 200; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .dropzone {
+            width: 400px; height: 300px; border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 20px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; cursor: pointer;
+            transition: all 0.2s; background: rgba(0,0,0,0.2);
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--grad-end); background: rgba(79, 172, 254, 0.1);
+        }
+        .dropzone p { color: var(--text-muted); font-size: 1.1rem; pointer-events: none; }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: var(--grad-end); border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         /* Fullscreen state */
         #done-screen {
             display: none; position: fixed; inset: 0; background: var(--bg-main);
@@ -169,6 +193,16 @@
     </style>
 </head>
 <body>
+
+    <div id="upload-overlay">
+        <h1 style="margin-bottom: 30px;">Upload Image to Begin</h1>
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" style="display:none" accept="image/*">
+            <p id="dropzone-text">Drag & drop an image here or click to browse</p>
+            <div class="spinner" id="upload-spinner" style="display:none"></div>
+        </div>
+    </div>
+
 
     <div class="left-panel">
         <div class="toolbar">
@@ -255,7 +289,102 @@
     const masksContainer = document.getElementById('masks-container');
     const drawBoxEl = document.getElementById('draw-box');
     
+    
+    const uploadOverlay = document.getElementById('upload-overlay');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const dropzoneText = document.getElementById('dropzone-text');
+    const uploadSpinner = document.getElementById('upload-spinner');
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault(); dropzone.classList.remove('dragover');
+        if(e.dataTransfer.files && e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => {
+        if(e.target.files && e.target.files.length > 0) handleUpload(e.target.files[0]);
+    });
+
+    async function handleUpload(file) {
+        dropzoneText.innerText = "AI Segmenting Image with MobileSAM...";
+        uploadSpinner.style.display = "block";
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if(data.status === 'ok') {
+                masksData = data.masks || [];
+                uploadOverlay.style.display = 'none';
+                initCanvas(data.image_url);
+            }
+        } catch(e) {
+            console.error(e);
+            dropzoneText.innerText = "Upload failed. Try again.";
+            uploadSpinner.style.display = "none";
+        }
+    }
+
+    function initCanvas(imageUrl) {
+        mainImg.style.display = 'block';
+        mainImg.onload = () => {
+            imageLayer.style.width = mainImg.naturalWidth + 'px';
+            imageLayer.style.height = mainImg.naturalHeight + 'px';
+            centerCanvas();
+            renderOverlays();
+        };
+        mainImg.onerror = () => {
+            imageLayer.style.width = '1024px';
+            imageLayer.style.height = '1024px';
+            imageLayer.style.background = '#2a2a2a';
+            centerCanvas();
+            renderOverlays();
+        }
+        if (imageUrl) {
+            mainImg.src = imageUrl;
+        }
+        renderGrid();
+        updateCounter();
+    }
+
+
     async function init() {
+        try {
+            const res = await fetch('/api/masks');
+            const data = await res.json();
+            masksData = data.masks || [];
+            if(masksData.length === 0) {
+                // Standalone mode, wait for upload
+                uploadOverlay.style.display = 'flex';
+                return;
+            } else {
+                uploadOverlay.style.display = 'none';
+            }
+            
+            // CLI Mode
+            mainImg.src = "/outputs/source.jpg"; // Wait, in CLI mode, maybe source.jpg is not there? 
+            // The original logic didn't assume a specific image, but let's see. 
+            // Actually, we'll try to load it. If it fails, fallback.
+            mainImg.src = "/outputs/" + masksData[0].thumb_file.split('/')[0] + "/source.jpg";
+            mainImg.onload = () => {
+                mainImg.style.display = 'block';
+                imageLayer.style.width = mainImg.naturalWidth + 'px';
+                imageLayer.style.height = mainImg.naturalHeight + 'px';
+                centerCanvas();
+                renderOverlays();
+            };
+            mainImg.onerror = () => {
+                imageLayer.style.width = '1024px';
+                imageLayer.style.height = '1024px';
+                imageLayer.style.background = '#2a2a2a';
+                centerCanvas();
+                renderOverlays();
+            };
+            */
+
+
+/*
         try {
             const res = await fetch('/api/masks');
             const data = await res.json();
@@ -280,10 +409,8 @@
                 renderOverlays();
             };
             
-            renderGrid();
-            updateCounter();
-        } catch(e) { console.error(e); }
-    }
+            */
+
 
     // Canvas Interactions
     function updateTransform() {
@@ -547,6 +674,7 @@
         document.getElementById('counter-badge').innerText = `${selectedIds.size} / ${masksData.length}`;
     }
 
+/*
     async function submitSelection() {
         if(selectedIds.size === 0) return alert("Select at least one subject.");
         const btn = document.getElementById('submit-btn');
@@ -573,6 +701,40 @@
             btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
         }
     }
+*/
+
+    async function submitSelection() {
+        if(selectedIds.size === 0) return alert("Select at least one subject.");
+        const btn = document.getElementById('submit-btn');
+        btn.innerText = 'Refining edges & AI labeling...'; btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    selected_ids: Array.from(selectedIds),
+                    api_key: document.getElementById('api-key').value || null
+                })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                document.getElementById('done-screen').style.display = 'flex';
+                if(data.contact_sheet) {
+                    const msg = document.getElementById('done-msg');
+                    msg.innerHTML = "Extraction complete!<br><br><img src='" + data.contact_sheet + "' style='max-width:80%; max-height: 60vh; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);'>";
+                }
+            } else {
+                alert("Submit failed");
+                btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
+            }
+        } catch(e) {
+            console.error(e);
+            alert("Submit failed");
+            btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
+        }
+    }
+
 
     window.addEventListener('keydown', e => {
         if(e.target.tagName === 'INPUT') return;

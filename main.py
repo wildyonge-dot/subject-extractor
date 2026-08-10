@@ -57,13 +57,22 @@ def create_contact_sheet(final_data, output_dir, output_filename="contact_sheet.
 
 def main():
     parser = argparse.ArgumentParser(description="Subject Extractor")
-    parser.add_argument("image", help="Path to input image")
+    parser.add_argument("image", nargs="?", help="Path to input image")
     parser.add_argument("--output", default="outputs", help="Base output directory")
     parser.add_argument("--device", help="Device override (auto, cpu, mps, cuda)", default=None)
     parser.add_argument("--no-ui", action="store_true", help="Skip curation UI and extract all")
     parser.add_argument("--api-key", help="DeepSeek API key", default=None)
     args = parser.parse_args()
     
+    if not args.image:
+        print("Starting in Standalone Server Mode...")
+        import webbrowser
+        import uvicorn
+        from curate_server import app
+        webbrowser.open("http://127.0.0.1:8000")
+        uvicorn.run(app, host="127.0.0.1", port=8000)
+        return
+        
     if not os.path.exists(args.image):
         print(f"Error: Image {args.image} not found.")
         return
