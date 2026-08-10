@@ -101,31 +101,35 @@ def submit_selection(selection: Selection):
 @app.post("/api/upload")
 async def upload_image(file: UploadFile = File(...)):
     global SESSION_DIR, MASKS_DATA, SELECTED_IDS
-    run_id = time.strftime("%Y%m%d_%H%M%S")
-    output_dir = BASE_DIR / "outputs" / run_id
-    output_dir.mkdir(parents=True, exist_ok=True)
-    SESSION_DIR = output_dir
-    
-    source_path = output_dir / "source.jpg"
-    with open(source_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        run_id = time.strftime("%Y%m%d_%H%M%S")
+        output_dir = BASE_DIR / "outputs" / run_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        SESSION_DIR = output_dir
         
-    masks = run_segmentation(str(source_path), str(output_dir))
-    
-    # Update thumb paths to be relative to outputs folder
-    for m in masks:
-        if not m['thumb_file'].startswith(run_id):
-            m['thumb_file'] = f"{run_id}/{m['thumb_file']}"
+        source_path = output_dir / "source.jpg"
+        with open(source_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
             
-    MASKS_DATA = masks
-    SELECTED_IDS = []
-    
-    return {
-        "status": "ok",
-        "run_id": run_id,
-        "image_url": f"/outputs/{run_id}/source.jpg",
-        "masks": MASKS_DATA
-    }
+        masks = run_segmentation(str(source_path), str(output_dir))
+        
+        # Update thumb paths to be relative to outputs folder
+        for m in masks:
+            if not m['thumb_file'].startswith(run_id):
+                m['thumb_file'] = f"{run_id}/{m['thumb_file']}"
+                
+        MASKS_DATA = masks
+        SELECTED_IDS = []
+        
+        return {
+            "status": "ok",
+            "run_id": run_id,
+            "image_url": f"/outputs/{run_id}/source.jpg",
+            "masks": MASKS_DATA
+        }
+    except Exception as e:
+        print(f"Error during upload segmentation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/", response_class=HTMLResponse)
 def index():

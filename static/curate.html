@@ -194,12 +194,13 @@
 </head>
 <body>
 
+    <input type="file" id="file-input" style="display:none" accept="image/*">
     <div id="upload-overlay">
-        <h1 style="margin-bottom: 30px;">Upload Image to Begin</h1>
-        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
-            <input type="file" id="file-input" style="display:none" accept="image/*">
-            <p id="dropzone-text">Drag & drop an image here or click to browse</p>
+        <h1 style="margin-bottom: 20px;">Upload Image to Begin</h1>
+        <div class="dropzone" id="dropzone">
             <div class="spinner" id="upload-spinner" style="display:none"></div>
+            <p id="dropzone-text" style="margin: 0; text-align: center;">Drag & drop an image here or click to browse</p>
+            <p id="dropzone-subtext" style="font-size: 0.85rem; color: #64748b; margin-top: 8px; display: none;">AI is segmenting subjects with MobileSAM (~15-30s)...</p>
         </div>
     </div>
 
@@ -294,34 +295,55 @@
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('file-input');
     const dropzoneText = document.getElementById('dropzone-text');
+    const dropzoneSubtext = document.getElementById('dropzone-subtext');
     const uploadSpinner = document.getElementById('upload-spinner');
+
+    // Prevent default browser file-opening behavior
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        window.addEventListener(eventName, e => e.preventDefault(), false);
+    });
+
+    dropzone.onclick = () => fileInput.click();
 
     dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
     dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
     dropzone.addEventListener('drop', e => {
-        e.preventDefault(); dropzone.classList.remove('dragover');
-        if(e.dataTransfer.files && e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files[0]);
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleUpload(e.dataTransfer.files[0]);
+        }
     });
+
     fileInput.addEventListener('change', e => {
-        if(e.target.files && e.target.files.length > 0) handleUpload(e.target.files[0]);
+        if(e.target.files && e.target.files.length > 0) {
+            handleUpload(e.target.files[0]);
+        }
     });
 
     async function handleUpload(file) {
-        dropzoneText.innerText = "AI Segmenting Image with MobileSAM...";
+        console.log("Uploading file:", file.name);
+        dropzoneText.innerText = "Analyzing image...";
+        dropzoneSubtext.style.display = "block";
         uploadSpinner.style.display = "block";
+        
         const formData = new FormData();
         formData.append("file", file);
+        
         try {
             const res = await fetch('/api/upload', { method: 'POST', body: formData });
             const data = await res.json();
-            if(data.status === 'ok') {
+            if(res.ok && data.status === 'ok') {
                 masksData = data.masks || [];
                 uploadOverlay.style.display = 'none';
                 initCanvas(data.image_url);
+            } else {
+                throw new Error(data.detail || "Upload server error");
             }
         } catch(e) {
-            console.error(e);
-            dropzoneText.innerText = "Upload failed. Try again.";
+            console.error("Upload error:", e);
+            dropzoneText.innerText = "Error analyzing image. Click to try again.";
+            dropzoneSubtext.style.display = "none";
             uploadSpinner.style.display = "none";
         }
     }
