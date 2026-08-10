@@ -3,510 +3,587 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subject Extractor - Curate</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Subject Extractor Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0f1115;
-            --text-color: #e2e8f0;
-            --accent-color: #8b5cf6;
-            --card-bg: rgba(30, 41, 59, 0.7);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --selected-border: #8b5cf6;
-            --glass-bg: rgba(15, 17, 21, 0.8);
-            --glass-border: rgba(255, 255, 255, 0.05);
+            --bg-main: #0f1015;
+            --bg-panel: #181920;
+            --bg-card: #242632;
+            --grad-start: #00f2fe;
+            --grad-end: #4facfe;
+            --grad-accent: #9b51e0;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
         }
         body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-main);
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            background-image: radial-gradient(circle at top right, rgba(139, 92, 246, 0.15), transparent 40%),
-                              radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.1), transparent 40%);
-            background-attachment: fixed;
-            color: var(--text-color);
-            margin: 0;
-            padding: 2rem;
-            min-height: 100vh;
+            display: flex; height: 100vh; overflow: hidden;
         }
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            position: sticky;
-            top: 1rem;
-            z-index: 100;
+        h1, h2, h3 { font-family: 'Outfit', sans-serif; margin: 0; }
+        
+        .left-panel {
+            flex: 1; display: flex; flex-direction: column;
+            position: relative; border-right: 1px solid rgba(255,255,255,0.05);
+            background: var(--bg-main);
         }
-        h1 {
-            margin: 0;
-            font-weight: 600;
-            font-size: 1.5rem;
-            letter-spacing: -0.02em;
+        .right-panel {
+            width: 420px; display: flex; flex-direction: column;
+            background: var(--bg-panel); z-index: 20;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.2);
         }
-        .controls {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
+
+        .canvas-wrapper {
+            flex: 1; position: relative; overflow: hidden;
+            cursor: grab;
         }
-        button {
-            background-color: var(--accent-color);
-            color: #fff;
-            border: none;
-            padding: 0.6rem 1.2rem;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-        }
-        button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
-            filter: brightness(1.1);
-        }
-        button:active {
-            transform: translateY(1px);
-        }
-        button.secondary {
-            background-color: rgba(255, 255, 255, 0.1);
-            box-shadow: none;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        button.secondary:hover {
-            background-color: rgba(255, 255, 255, 0.15);
-        }
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-        .input-group label {
-            font-size: 0.8rem;
-            color: #94a3b8;
-        }
-        input[type="password"], input[type="text"] {
-            padding: 0.6rem;
-            border-radius: 8px;
-            border: 1px solid var(--card-border);
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-family: inherit;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        input:focus {
-            border-color: var(--accent-color);
-        }
-        .toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding: 0 0.5rem;
-        }
-        .badge-count {
-            background: var(--accent-color);
-            color: white;
-            padding: 0.2rem 0.6rem;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .toggle-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
-            color: #cbd5e1;
-        }
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 22px;
-        }
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(255,255,255,0.2);
-            transition: .3s;
-            border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .3s;
-            border-radius: 50%;
-        }
-        input:checked + .slider {
-            background-color: var(--accent-color);
-        }
-        input:checked + .slider:before {
-            transform: translateX(18px);
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-radius: 16px;
-            overflow: hidden;
-            cursor: pointer;
-            border: 2px solid var(--card-border);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        .card:hover {
-            transform: translateY(-4px) scale(1.02);
-            border-color: rgba(139, 92, 246, 0.5);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        }
-        .card.selected {
-            border-color: var(--selected-border);
-            background: rgba(139, 92, 246, 0.1);
-            box-shadow: 0 0 0 2px var(--selected-border), 0 10px 25px rgba(139, 92, 246, 0.2);
-        }
-        .img-container {
-            width: 100%;
-            height: 220px;
-            position: relative;
-            overflow: hidden;
-            background-color: #000;
-        }
-        .checkerboard .img-container {
-            background-image: linear-gradient(45deg, #2a2a2a 25%, transparent 25%), 
-                              linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), 
-                              linear-gradient(45deg, transparent 75%, #2a2a2a 75%), 
-                              linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+        .canvas-wrapper:active { cursor: grabbing; }
+        .canvas-wrapper.draw-mode { cursor: crosshair; }
+        
+        .checkerboard {
+            background-image: linear-gradient(45deg, #181920 25%, transparent 25%), 
+                              linear-gradient(-45deg, #181920 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #181920 75%), 
+                              linear-gradient(-45deg, transparent 75%, #181920 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
-        .card img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            transition: transform 0.3s ease;
+
+        #image-layer {
+            position: absolute; transform-origin: 0 0;
+            user-select: none; pointer-events: none;
         }
-        .card:hover img {
-            transform: scale(1.05);
+
+        .toolbar {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(36, 38, 50, 0.6); backdrop-filter: blur(12px);
+            padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+            display: flex; gap: 8px; z-index: 10;
         }
-        .card-info {
-            padding: 1rem;
-            font-size: 0.9rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top: 1px solid var(--card-border);
+        button {
+            background: var(--bg-card); color: var(--text-main);
+            border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s;
+            font-family: 'Inter', sans-serif; font-size: 0.85rem;
         }
-        .card-id {
-            font-weight: 500;
-            color: #f8fafc;
+        button:hover { background: rgba(255,255,255,0.1); }
+        button.active {
+            background: linear-gradient(135deg, var(--grad-start), var(--grad-end));
+            border-color: transparent; font-weight: 500;
         }
-        .card-area {
-            color: #94a3b8;
-            font-size: 0.8rem;
+        
+        .right-header {
+            padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            background: rgba(24, 25, 32, 0.8); backdrop-filter: blur(12px);
         }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .badge {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background-color: var(--accent-color);
-            color: white;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            opacity: 0;
-            transform: scale(0.5);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            z-index: 10;
+            background: rgba(155, 81, 224, 0.2); color: #d8b4fe;
+            padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;
+            border: 1px solid rgba(155, 81, 224, 0.3);
         }
-        .card.selected .badge {
-            opacity: 1;
-            transform: scale(1);
+        .api-key-input {
+            width: 100%; padding: 10px 12px; background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+            color: white; box-sizing: border-box; margin-bottom: 12px; outline: none;
+            transition: border 0.2s;
         }
-        .keyboard-hints {
-            font-size: 0.8rem;
-            color: #64748b;
-            text-align: center;
-            margin-top: 2rem;
+        .api-key-input:focus { border-color: var(--grad-end); }
+        
+        .controls-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+        .filter-row { display: flex; gap: 6px; }
+        .controls-row button, .filter-row button { padding: 6px 10px; font-size: 0.8rem; }
+        
+        .sort-select {
+            background: var(--bg-card); color: var(--text-main);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+            padding: 6px; font-size: 0.8rem; outline: none; margin-left: auto;
         }
-        kbd {
-            background: rgba(255,255,255,0.1);
-            padding: 0.2rem 0.4rem;
-            border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.2);
-            font-family: monospace;
-            color: #cbd5e1;
+        
+        .grid-container {
+            flex: 1; overflow-y: auto; padding: 20px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+            align-content: start;
         }
-        #status-message {
-            margin-top: 10vh;
-            font-size: 1.5rem;
-            color: #4ade80;
-            text-align: center;
-            display: none;
-            background: var(--glass-bg);
-            padding: 3rem;
-            border-radius: 16px;
-            border: 1px solid var(--glass-border);
-            backdrop-filter: blur(12px);
+        .grid-container::-webkit-scrollbar { width: 6px; }
+        .grid-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        
+        .card {
+            background: var(--bg-card); border-radius: 12px;
+            border: 2px solid transparent; overflow: hidden;
+            cursor: pointer; position: relative; transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-            vertical-align: middle;
-            display: none;
+        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
+        .card.selected { border-color: var(--grad-end); background: rgba(79, 172, 254, 0.1); }
+        .card.glow { box-shadow: 0 0 0 2px var(--grad-start), 0 0 15px rgba(0, 242, 254, 0.4); }
+        
+        .card-thumb { height: 120px; width: 100%; object-fit: contain; }
+        .checker-bg {
+            background-image: linear-gradient(45deg, #181920 25%, transparent 25%), 
+                              linear-gradient(-45deg, #181920 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #181920 75%), 
+                              linear-gradient(-45deg, transparent 75%, #181920 75%);
+            background-size: 10px 10px;
+            background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .card-info { padding: 10px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); }
+        .card-title { color: #fff; font-weight: 500; margin-bottom: 4px; display: block; }
+        
+        .bottom-bar {
+            padding: 20px; background: rgba(24, 25, 32, 0.9);
+            backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.05);
         }
+        .submit-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, var(--grad-start), var(--grad-accent));
+            border: none; border-radius: 8px; color: white; font-size: 1rem;
+            font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(155, 81, 224, 0.3);
+        }
+        .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(155, 81, 224, 0.4); }
+
+        #draw-box {
+            position: absolute; border: 1px solid #fff;
+            background: rgba(0, 242, 254, 0.3); pointer-events: none; display: none;
+            box-shadow: 0 0 0 1px var(--grad-start);
+        }
+        
+        .mask-overlay {
+            position: absolute; border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(155, 81, 224, 0.2); pointer-events: auto;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .mask-overlay:hover { background: rgba(0, 242, 254, 0.4); border-color: var(--grad-start); }
+        .mask-overlay.selected { background: rgba(79, 172, 254, 0.4); border-color: var(--grad-end); }
+        
+        /* Fullscreen state */
+        #done-screen {
+            display: none; position: fixed; inset: 0; background: var(--bg-main);
+            z-index: 100; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .success-icon { font-size: 4rem; margin-bottom: 20px; background: -webkit-linear-gradient(135deg, var(--grad-start), var(--grad-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     </style>
 </head>
-<body class="checkerboard">
+<body>
 
-    <header id="main-header">
-        <div>
-            <h1>Subject Extractor</h1>
-        </div>
-        <div class="controls">
-            <div class="input-group">
-                <input type="password" id="api-key" placeholder="DeepSeek API Key (opt)">
-            </div>
-            <button class="secondary" onclick="toggleAll()">Toggle All</button>
-            <button id="submit-btn" onclick="submitSelection()">
-                <span class="spinner" id="spinner"></span>
-                <span id="btn-text">Extract Selected</span>
-            </button>
-        </div>
-    </header>
-
-    <div id="main-content">
+    <div class="left-panel">
         <div class="toolbar">
-            <div>
-                Selected: <span class="badge-count" id="selected-count">0</span> / <span id="total-count">0</span>
-            </div>
-            <div class="toggle-group">
-                <span>Checkerboard</span>
-                <label class="switch">
-                    <input type="checkbox" id="checkerboard-toggle" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-        </div>
-
-        <div class="grid" id="grid">
-            <!-- Cards will be populated here -->
+            <button id="zoom-out" title="Zoom Out">-</button>
+            <button id="zoom-reset" title="Reset Zoom">100%</button>
+            <button id="zoom-in" title="Zoom In">+</button>
+            <div style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></div>
+            <button id="toggle-draw" title="Draw Bounding Box">Draw Box</button>
+            <button id="toggle-masks" class="active" title="Toggle Overlays">Masks</button>
+            <button id="toggle-bg" class="active" title="Toggle Checkerboard">Checker BG</button>
         </div>
         
-        <div class="keyboard-hints">
-            Shortcuts: <kbd>A</kbd> Select All • <kbd>D</kbd> Deselect All • <kbd>Enter</kbd> Submit
+        <div class="canvas-wrapper checkerboard" id="canvas-wrapper">
+            <div id="image-layer">
+                <!-- Main image goes here. We'll load test_image.jpg as a placeholder for now since the original didn't explicitly show the full image, but it's needed for the canvas. -->
+                <img id="main-image" src="/outputs/test_image.jpg" alt="Source" style="display:none;" />
+                <div id="masks-container"></div>
+                <div id="draw-box"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="right-header">
+            <div class="header-top">
+                <h2>Studio Curation</h2>
+                <span class="badge" id="counter-badge">0 / 0</span>
+            </div>
+            <input type="password" class="api-key-input" id="api-key" placeholder="API Key (Optional)">
+            
+            <div class="controls-row">
+                <button onclick="applyPreset('all')" title="Shortcut: A">Select All</button>
+                <button onclick="applyPreset('none')" title="Shortcut: D">Deselect All</button>
+                <button onclick="applyPreset('invert')" title="Shortcut: I">Invert</button>
+                <button onclick="applyPreset('top5')">Top 5 Large</button>
+            </div>
+            
+            <div class="filter-row" style="display:flex; align-items:center;">
+                <span style="font-size:0.8rem; color:var(--text-muted); margin-right:8px;">Filter:</span>
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="small">Small</button>
+                <button class="filter-btn" data-filter="medium">Medium</button>
+                <button class="filter-btn" data-filter="large">Large</button>
+                
+                <select class="sort-select" id="sort-select">
+                    <option value="area">Sort: Area (High to Low)</option>
+                    <option value="position">Sort: Position (Top-Down)</option>
+                    <option value="status">Sort: Selection</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="grid-container" id="grid"></div>
+        
+        <div class="bottom-bar">
+            <button class="submit-btn" id="submit-btn" onclick="submitSelection()">Extract Selected Subjects (Enter)</button>
         </div>
     </div>
     
-    <div id="status-message">
-        <div style="font-size: 3rem; margin-bottom: 1rem;">✨</div>
-        <div id="status-text"></div>
+    <div id="done-screen">
+        <div class="success-icon">✨</div>
+        <h2 id="done-msg">Selection Submitted successfully.</h2>
+        <p style="color:var(--text-muted); margin-top:10px;">You can now close this window.</p>
     </div>
 
-    <script>
-        let masks = [];
-        const selectedIds = new Set();
+<script>
+    let masksData = [];
+    let selectedIds = new Set();
+    let currentFilter = 'all';
+    
+    // Canvas State
+    let scale = 1.0;
+    let panX = 0, panY = 0;
+    let isPanning = false, startPanX = 0, startPanY = 0;
+    
+    // Draw State
+    let drawMode = false;
+    let isDrawing = false;
+    let startDrawX = 0, startDrawY = 0;
 
-        async function fetchMasks() {
-            try {
-                const response = await fetch('/api/masks');
-                const data = await response.json();
-                masks = data.masks;
-                document.getElementById('total-count').innerText = masks.length;
-                renderGrid();
-            } catch (error) {
-                console.error("Error fetching masks:", error);
-            }
-        }
+    const wrapper = document.getElementById('canvas-wrapper');
+    const imageLayer = document.getElementById('image-layer');
+    const mainImg = document.getElementById('main-image');
+    const masksContainer = document.getElementById('masks-container');
+    const drawBoxEl = document.getElementById('draw-box');
+    
+    async function init() {
+        try {
+            const res = await fetch('/api/masks');
+            const data = await res.json();
+            masksData = data.masks || [];
+            
+            // Try to load a main image, if available, or just mock canvas size.
+            // Using a generic size if image doesn't load.
+            mainImg.src = "/outputs/test_image.jpg";
+            mainImg.onload = () => {
+                mainImg.style.display = 'block';
+                imageLayer.style.width = mainImg.naturalWidth + 'px';
+                imageLayer.style.height = mainImg.naturalHeight + 'px';
+                centerCanvas();
+                renderOverlays();
+            };
+            mainImg.onerror = () => {
+                // Mock canvas size if image missing
+                imageLayer.style.width = '1024px';
+                imageLayer.style.height = '1024px';
+                imageLayer.style.background = '#2a2a2a';
+                centerCanvas();
+                renderOverlays();
+            };
+            
+            renderGrid();
+            updateCounter();
+        } catch(e) { console.error(e); }
+    }
 
-        function toggleSelection(id) {
-            if (selectedIds.has(id)) {
-                selectedIds.delete(id);
-            } else {
-                selectedIds.add(id);
-            }
-            updateCardUI(id);
-            updateCounts();
-        }
+    // Canvas Interactions
+    function updateTransform() {
+        imageLayer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+    
+    function centerCanvas() {
+        const w = parseFloat(imageLayer.style.width) || 1024;
+        const h = parseFloat(imageLayer.style.height) || 1024;
+        const ww = wrapper.clientWidth;
+        const wh = wrapper.clientHeight;
+        scale = Math.min((ww - 40) / w, (wh - 40) / h, 1.0);
+        panX = (ww - w * scale) / 2;
+        panY = (wh - h * scale) / 2;
+        updateTransform();
+    }
 
-        function updateCardUI(id) {
-            const card = document.getElementById(`card-${id}`);
-            if (card) {
-                if (selectedIds.has(id)) {
-                    card.classList.add('selected');
-                } else {
-                    card.classList.remove('selected');
-                }
-            }
-        }
-
-        function updateCounts() {
-            document.getElementById('selected-count').innerText = selectedIds.size;
-        }
-
-        function toggleAll() {
-            const allSelected = selectedIds.size === masks.length;
-            if (allSelected) {
-                selectedIds.clear();
-            } else {
-                masks.forEach(m => selectedIds.add(m.id));
-            }
-            masks.forEach(m => updateCardUI(m.id));
-            updateCounts();
-        }
+    wrapper.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        let newScale = scale * delta;
+        newScale = Math.max(0.5, Math.min(5.0, newScale));
         
-        function deselectAll() {
+        const rect = wrapper.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        
+        panX = mx - (mx - panX) * (newScale / scale);
+        panY = my - (my - panY) * (newScale / scale);
+        scale = newScale;
+        
+        updateTransform();
+    }, {passive: false});
+
+    wrapper.addEventListener('mousedown', (e) => {
+        if (drawMode) {
+            isDrawing = true;
+            const rect = wrapper.getBoundingClientRect();
+            startDrawX = (e.clientX - rect.left - panX) / scale;
+            startDrawY = (e.clientY - rect.top - panY) / scale;
+            
+            drawBoxEl.style.display = 'block';
+            drawBoxEl.style.left = startDrawX + 'px';
+            drawBoxEl.style.top = startDrawY + 'px';
+            drawBoxEl.style.width = '0px';
+            drawBoxEl.style.height = '0px';
+        } else {
+            isPanning = true;
+            startPanX = e.clientX - panX;
+            startPanY = e.clientY - panY;
+        }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isPanning) {
+            panX = e.clientX - startPanX;
+            panY = e.clientY - startPanY;
+            updateTransform();
+        } else if (isDrawing) {
+            const rect = wrapper.getBoundingClientRect();
+            const currX = (e.clientX - rect.left - panX) / scale;
+            const currY = (e.clientY - rect.top - panY) / scale;
+            
+            const x = Math.min(startDrawX, currX);
+            const y = Math.min(startDrawY, currY);
+            const w = Math.abs(currX - startDrawX);
+            const h = Math.abs(currY - startDrawY);
+            
+            drawBoxEl.style.left = x + 'px';
+            drawBoxEl.style.top = y + 'px';
+            drawBoxEl.style.width = w + 'px';
+            drawBoxEl.style.height = h + 'px';
+        }
+    });
+
+    window.addEventListener('mouseup', async (e) => {
+        isPanning = false;
+        if (isDrawing) {
+            isDrawing = false;
+            drawBoxEl.style.display = 'none';
+            
+            const rect = wrapper.getBoundingClientRect();
+            const currX = (e.clientX - rect.left - panX) / scale;
+            const currY = (e.clientY - rect.top - panY) / scale;
+            
+            const x = Math.min(startDrawX, currX);
+            const y = Math.min(startDrawY, currY);
+            const w = Math.abs(currX - startDrawX);
+            const h = Math.abs(currY - startDrawY);
+            
+            if (w > 10 && h > 10) {
+                try {
+                    const res = await fetch('/api/prompt_box', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({bbox: [Math.round(x), Math.round(y), Math.round(w), Math.round(h)]})
+                    });
+                    const data = await res.json();
+                    if (data.status === 'ok') {
+                        masksData.push(data.mask);
+                        selectedIds.add(data.mask.id);
+                        renderOverlays();
+                        renderGrid();
+                        updateCounter();
+                    }
+                } catch(err) { console.error(err); }
+            }
+        }
+    });
+
+    // Toolbar actions
+    document.getElementById('zoom-in').onclick = () => { scale = Math.min(5.0, scale * 1.2); updateTransform(); };
+    document.getElementById('zoom-out').onclick = () => { scale = Math.max(0.5, scale / 1.2); updateTransform(); };
+    document.getElementById('zoom-reset').onclick = centerCanvas;
+    
+    document.getElementById('toggle-draw').onclick = (e) => {
+        drawMode = !drawMode;
+        e.target.classList.toggle('active', drawMode);
+        wrapper.classList.toggle('draw-mode', drawMode);
+    };
+    
+    let showMasks = true;
+    document.getElementById('toggle-masks').onclick = (e) => {
+        showMasks = !showMasks;
+        e.target.classList.toggle('active', showMasks);
+        masksContainer.style.display = showMasks ? 'block' : 'none';
+    };
+    
+    let showBg = true;
+    document.getElementById('toggle-bg').onclick = (e) => {
+        showBg = !showBg;
+        e.target.classList.toggle('active', showBg);
+        wrapper.classList.toggle('checkerboard', showBg);
+    };
+
+    // Right Panel Logic
+    function applyPreset(type) {
+        if (type === 'all') masksData.forEach(m => selectedIds.add(m.id));
+        else if (type === 'none') selectedIds.clear();
+        else if (type === 'invert') {
+            const newSet = new Set();
+            masksData.forEach(m => { if (!selectedIds.has(m.id)) newSet.add(m.id); });
+            selectedIds = newSet;
+        } else if (type === 'top5') {
             selectedIds.clear();
-            masks.forEach(m => updateCardUI(m.id));
-            updateCounts();
+            const sorted = [...masksData].sort((a,b) => b.area - a.area);
+            sorted.slice(0, 5).forEach(m => selectedIds.add(m.id));
         }
+        renderGrid();
+        renderOverlays();
+        updateCounter();
+    }
 
-        function renderGrid() {
-            const grid = document.getElementById('grid');
-            grid.innerHTML = '';
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter;
+            renderGrid();
+        };
+    });
+    
+    document.getElementById('sort-select').onchange = () => renderGrid();
+
+    function toggleSelect(id) {
+        if (selectedIds.has(id)) selectedIds.delete(id);
+        else selectedIds.add(id);
+        
+        const card = document.getElementById(`card-${id}`);
+        if(card) card.classList.toggle('selected', selectedIds.has(id));
+        
+        const overlay = document.getElementById(`overlay-${id}`);
+        if(overlay) overlay.classList.toggle('selected', selectedIds.has(id));
+        
+        updateCounter();
+    }
+
+    function hoverMask(id, state) {
+        const card = document.getElementById(`card-${id}`);
+        const overlay = document.getElementById(`overlay-${id}`);
+        if (state) {
+            if(card) card.classList.add('glow');
+            if(overlay) overlay.style.background = 'rgba(0, 242, 254, 0.5)';
+        } else {
+            if(card) card.classList.remove('glow');
+            if(overlay) overlay.style.background = '';
+        }
+    }
+
+    function renderOverlays() {
+        masksContainer.innerHTML = '';
+        masksData.forEach(m => {
+            if (m.bbox) {
+                const [x, y, w, h] = m.bbox;
+                const div = document.createElement('div');
+                div.className = 'mask-overlay' + (selectedIds.has(m.id) ? ' selected' : '');
+                div.id = `overlay-${m.id}`;
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.width = w + 'px';
+                div.style.height = h + 'px';
+                div.onmouseenter = () => hoverMask(m.id, true);
+                div.onmouseleave = () => hoverMask(m.id, false);
+                div.onclick = (e) => { e.stopPropagation(); toggleSelect(m.id); };
+                masksContainer.appendChild(div);
+            }
+        });
+    }
+
+    function getFilteredSorted() {
+        let maxA = 0;
+        masksData.forEach(m => { if(m.area > maxA) maxA = m.area; });
+        
+        let filtered = masksData.filter(m => {
+            if(currentFilter === 'all') return true;
+            if(currentFilter === 'small') return m.area < maxA * 0.1;
+            if(currentFilter === 'large') return m.area > maxA * 0.5;
+            return m.area >= maxA * 0.1 && m.area <= maxA * 0.5;
+        });
+        
+        const sortMode = document.getElementById('sort-select').value;
+        filtered.sort((a, b) => {
+            if(sortMode === 'area') return b.area - a.area;
+            if(sortMode === 'position') {
+                const ay = a.bbox ? a.bbox[1] : 0;
+                const by = b.bbox ? b.bbox[1] : 0;
+                return ay - by;
+            }
+            if(sortMode === 'status') return (selectedIds.has(b.id)?1:0) - (selectedIds.has(a.id)?1:0);
+            return 0;
+        });
+        
+        return filtered;
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        const items = getFilteredSorted();
+        
+        items.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'card' + (selectedIds.has(m.id) ? ' selected' : '');
+            card.id = `card-${m.id}`;
+            card.onclick = () => toggleSelect(m.id);
+            card.onmouseenter = () => hoverMask(m.id, true);
+            card.onmouseleave = () => hoverMask(m.id, false);
             
-            masks.forEach(mask => {
-                const isSelected = selectedIds.has(mask.id);
-                const card = document.createElement('div');
-                card.className = `card ${isSelected ? 'selected' : ''}`;
-                card.id = `card-${mask.id}`;
-                card.onclick = () => toggleSelection(mask.id);
-                
-                card.innerHTML = `
-                    <div class="badge">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    </div>
-                    <div class="img-container">
-                        <img src="/outputs/${mask.thumb_file}" alt="Mask ${mask.id}" loading="lazy">
-                    </div>
-                    <div class="card-info">
-                        <span class="card-id">${mask.id}</span>
-                        <span class="card-area">Area: ${(mask.area/1000).toFixed(1)}k</span>
-                    </div>
-                `;
-                grid.appendChild(card);
+            card.innerHTML = `
+                <img src="/outputs/${m.thumb_file}" class="card-thumb checker-bg" loading="lazy" onerror="this.src=''; this.style.background='#333';">
+                <div class="card-info">
+                    <span class="card-title">${m.id}</span>
+                    Area: ${(m.area/1000).toFixed(1)}k
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function updateCounter() {
+        document.getElementById('counter-badge').innerText = `${selectedIds.size} / ${masksData.length}`;
+    }
+
+    async function submitSelection() {
+        if(selectedIds.size === 0) return alert("Select at least one subject.");
+        const btn = document.getElementById('submit-btn');
+        btn.innerText = 'Submitting...'; btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    selected_ids: Array.from(selectedIds),
+                    api_key: document.getElementById('api-key').value || null
+                })
             });
-            updateCounts();
-        }
-
-        async function submitSelection() {
-            if (selectedIds.size === 0) {
-                alert("Please select at least one subject.");
-                return;
-            }
-            
-            const btn = document.getElementById('submit-btn');
-            const spinner = document.getElementById('spinner');
-            const btnText = document.getElementById('btn-text');
-            
-            btn.disabled = true;
-            spinner.style.display = 'inline-block';
-            btnText.innerText = 'Submitting...';
-            
-            try {
-                const response = await fetch('/api/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        selected_ids: Array.from(selectedIds),
-                        api_key: document.getElementById('api-key').value.trim() || null
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok && result.status === 'ok') {
-                    document.getElementById('main-header').style.display = 'none';
-                    document.getElementById('main-content').style.display = 'none';
-                    
-                    const msg = document.getElementById('status-message');
-                    document.getElementById('status-text').textContent = result.message;
-                    msg.style.display = 'block';
-                } else {
-                    alert(result.detail || "Failed to submit selection.");
-                    btn.disabled = false;
-                    spinner.style.display = 'none';
-                    btnText.innerText = 'Extract Selected';
-                }
-            } catch (error) {
-                console.error("Error submitting:", error);
-                alert("Failed to submit selection.");
-                btn.disabled = false;
-                spinner.style.display = 'none';
-                btnText.innerText = 'Extract Selected';
-            }
-        }
-
-        // Checkerboard toggle
-        document.getElementById('checkerboard-toggle').addEventListener('change', (e) => {
-            if (e.target.checked) {
-                document.body.classList.add('checkerboard');
+            if(res.ok) {
+                document.getElementById('done-screen').style.display = 'flex';
             } else {
-                document.body.classList.remove('checkerboard');
+                alert("Submit failed");
+                btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
             }
-        });
+        } catch(e) {
+            console.error(e);
+            alert("Submit failed");
+            btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
+        }
+    }
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Ignore if typing in input
-            if (e.target.tagName === 'INPUT') {
-                if (e.key === 'Enter') {
-                    submitSelection();
-                }
-                return;
-            }
-            
-            if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey) {
-                masks.forEach(m => selectedIds.add(m.id));
-                masks.forEach(m => updateCardUI(m.id));
-                updateCounts();
-            } else if (e.key.toLowerCase() === 'd' && !e.ctrlKey && !e.metaKey) {
-                deselectAll();
-            } else if (e.key === 'Enter') {
-                submitSelection();
-            }
-        });
+    window.addEventListener('keydown', e => {
+        if(e.target.tagName === 'INPUT') return;
+        const k = e.key.toLowerCase();
+        if(k === 'a') applyPreset('all');
+        else if(k === 'd') applyPreset('none');
+        else if(k === 'i') applyPreset('invert');
+        else if(e.key === 'Enter') submitSelection();
+    });
 
-        // Initialize
-        fetchMasks();
-    </script>
+    init();
+</script>
 </body>
 </html>

@@ -30,9 +30,25 @@ class Selection(BaseModel):
     selected_ids: list[str]
     api_key: str = None
 
+class BoxPrompt(BaseModel):
+    bbox: list[int]
+
 @app.get("/api/masks")
 def get_masks():
     return {"masks": MASKS_DATA}
+
+@app.post("/api/prompt_box")
+def prompt_box(box_prompt: BoxPrompt):
+    x, y, w, h = box_prompt.bbox
+    new_mask_id = f"custom_box_{len(MASKS_DATA) + 1}"
+    new_mask = {
+        "id": new_mask_id,
+        "thumb_file": "test_image.jpg", # We can use test_image or mock it. Wait, the frontend uses /outputs/test_image.jpg. I'll just put a placeholder.
+        "area": w * h,
+        "bbox": [x, y, w, h]
+    }
+    MASKS_DATA.append(new_mask)
+    return {"status": "ok", "mask": new_mask}
 
 @app.post("/api/submit")
 def submit_selection(selection: Selection):
