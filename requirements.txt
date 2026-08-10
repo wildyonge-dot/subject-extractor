@@ -25,6 +25,7 @@ pytesseract
 # Web UI
 fastapi
 uvicorn
+python-multipart
 
 # API & Config
 python-dotenv

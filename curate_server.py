@@ -8,7 +8,6 @@ from segment import run_segmentation
 from extract import extract_subjects
 from refine import refine_edges
 from label import label_subjects
-from main import create_contact_sheet
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -86,7 +85,7 @@ def submit_selection(selection: Selection):
         if os.path.exists(source_path):
             extracted = extract_subjects(source_path, SELECTED_IDS, MASKS_DATA, str(SESSION_DIR))
             refined = refine_edges(extracted, str(SESSION_DIR))
-            final = label_subjects(refined, str(SESSION_DIR), api_key=API_KEY)
+            from main import create_contact_sheet
             create_contact_sheet(final, str(SESSION_DIR))
             
             run_id = SESSION_DIR.name
