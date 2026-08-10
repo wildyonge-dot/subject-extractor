@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import torch
 from pathlib import Path
+from PIL import Image
 from mobile_sam import sam_model_registry, SamAutomaticMaskGenerator
 
 # Monkeypatch torch.as_tensor to fix MPS float64 bug in MobileSAM
@@ -18,8 +19,16 @@ torch.as_tensor = _mps_as_tensor
 
 from utils import load_config, download_model, get_device
 
+# Keep downloaded rembg weights inside the project so the app works in
+# sandboxed environments and does not depend on a writable user home folder.
+U2NET_HOME = Path(__file__).resolve().parent / "models" / "u2net"
+U2NET_HOME.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("U2NET_HOME", str(U2NET_HOME))
+
 def setup_mobilesam(config):
-    model_path = config['model_paths']['mobilesam']
+    model_path = Path(config['model_paths']['mobilesam'])
+    if not model_path.is_absolute():
+        model_path = Path(__file__).resolve().parent / model_path
     # Default URL for MobileSAM weights
     url = "https://github.com/ChaoningZhang/MobileSAM/raw/master/weights/mobile_sam.pt"
     download_model(url, model_path)
@@ -28,7 +37,7 @@ def setup_mobilesam(config):
     print(f"Loading MobileSAM on device: {device}")
     
     model_type = "vit_t"
-    sam = sam_model_registry[model_type](checkpoint=model_path)
+    sam = sam_model_registry[model_type](checkpoint=str(model_path))
     sam.to(device=device)
     sam.eval()
     
@@ -87,8 +96,60 @@ def filter_masks(masks, image_shape, config):
             
     return filtered
 
-def run_segmentation(image_path, output_dir):
+
+def run_fast_segmentation(image_path, output_dir):
+    """Create one foreground mask quickly using the lightweight rembg model."""
+    from rembg import new_session, remove
+
+    print("Using fast foreground segmentation (u2netp)...")
+    image = Image.open(image_path).convert("RGB")
+    original_size = image.size
+    analysis_image = image.copy()
+    analysis_image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+    session = new_session("u2netp", providers=["CoreMLExecutionProvider", "CPUExecutionProvider"])
+    small_rgba = remove(analysis_image, session=session, alpha_matting=False).convert("RGBA")
+    alpha_image = small_rgba.getchannel("A").resize(original_size, Image.Resampling.BILINEAR)
+    alpha = np.asarray(alpha_image, dtype=np.uint8)
+    rgba = image.copy()
+    rgba.putalpha(alpha_image)
+
+    # Ignore tiny alpha noise when calculating the subject bounds.
+    foreground = alpha > 8
+    ys, xs = np.where(foreground)
+    if len(xs) == 0 or len(ys) == 0:
+        return []
+
+    x1, x2 = int(xs.min()), int(xs.max()) + 1
+    y1, y2 = int(ys.min()), int(ys.max()) + 1
+    mask_id = "subject_000"
+    mask_filename = f"{mask_id}_mask.png"
+    thumb_filename = f"{mask_id}_thumb.png"
+
+    os.makedirs(output_dir, exist_ok=True)
+    Image.fromarray(alpha, mode="L").save(os.path.join(output_dir, mask_filename))
+    rgba.crop((x1, y1, x2, y2)).save(os.path.join(output_dir, thumb_filename))
+
+    return [{
+        "id": mask_id,
+        "bbox": [x1, y1, x2 - x1, y2 - y1],
+        "mask_file": mask_filename,
+        "thumb_file": thumb_filename,
+        "area": int(foreground.sum()),
+        "segmentation_mode": "fast",
+        "skip_refine": True,
+    }]
+
+
+def run_segmentation(image_path, output_dir, mode=None):
     config = load_config()
+    mode = (mode or os.environ.get("SUBJECT_EXTRACTOR_MODE") or
+            config.get("segmentation", {}).get("mode", "fast")).lower()
+    if mode not in {"fast", "quality"}:
+        raise ValueError(f"Unsupported segmentation mode: {mode}")
+
+    if mode == "fast":
+        return run_fast_segmentation(image_path, output_dir)
+
     image = cv2.imread(image_path)
     if image is None:
         raise ValueError(f"Could not load image: {image_path}")

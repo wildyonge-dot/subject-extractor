@@ -47,22 +47,29 @@ OCR Text: {ocr_text if ocr_text else 'None'}
         return slug[:30]
 
 
-def label_subjects(refined_data, output_dir, api_key=None):
+def label_subjects(refined_data, output_dir, api_key=None, label_mode="ai"):
     config = load_config()
-    device = get_device()
+    device = get_device(config)
     
-    print(f"Loading moondream2 on {device}...")
+    label_mode = (label_mode or "ai").lower()
+    if label_mode not in {"ai", "ocr", "basic"}:
+        raise ValueError(f"Unsupported label mode: {label_mode}")
+
+    print(f"Label mode: {label_mode}")
     model_id = "vikhyatk/moondream2"
     revision = "2024-08-26"
     
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id, trust_remote_code=True, revision=revision
-        ).to(device)
-        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
-    except Exception as e:
-        print(f"Failed to load moondream2: {e}")
-        model = None
+    model = None
+    tokenizer = None
+    if label_mode == "ai":
+        print(f"Loading moondream2 on {device}...")
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id, trust_remote_code=True, revision=revision
+            ).to(device)
+            tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        except Exception as e:
+            print(f"Failed to load moondream2: {e}")
     
     labeled_data = []
     
@@ -80,15 +87,17 @@ def label_subjects(refined_data, output_dir, api_key=None):
             caption = model.answer_question(enc_image, "Describe the main subject concisely in a few words.", tokenizer)
             print(f"[{mask_id}] Caption: {caption}")
             
-        # OCR
-        ocr_text = pytesseract.image_to_string(image).strip()
+        ocr_text = pytesseract.image_to_string(image).strip() if label_mode in {"ai", "ocr"} else ""
         if ocr_text:
             # Clean up OCR slightly
             ocr_text = " ".join(ocr_text.split())[:50]
             print(f"[{mask_id}] OCR: {ocr_text}")
             
         # Generate clean filename
-        slug = get_clean_filename(caption, ocr_text, config, api_key)
+        if label_mode == "basic":
+            slug = "subject"
+        else:
+            slug = get_clean_filename(caption, ocr_text, config, api_key)
         if not slug:
             slug = "unknown-subject"
             

@@ -13,6 +13,12 @@ def refine_edges(extracted_data, output_dir):
     
     for item in extracted_data:
         mask_id = item['id']
+        if item.get('skip_refine'):
+            item['refined_file'] = item['extracted_file']
+            item['refine_model'] = 'fast_foreground'
+            refined_data.append(item)
+            continue
+
         aspect_ratio = item['aspect_ratio']
         input_file = os.path.join(output_dir, item['extracted_file'])
         output_file = os.path.join(output_dir, f"{mask_id}_refined.png")

@@ -159,6 +159,11 @@
         }
         .mask-overlay:hover { background: rgba(0, 242, 254, 0.4); border-color: var(--grad-start); }
         .mask-overlay.selected { background: rgba(79, 172, 254, 0.4); border-color: var(--grad-end); }
+        .mask-image {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: fill; opacity: 0.28; pointer-events: none;
+            mix-blend-mode: screen;
+        }
         
 
         /* Upload Overlay */
@@ -200,8 +205,39 @@
         <label class="dropzone" id="dropzone" for="file-input">
             <div class="spinner" id="upload-spinner" style="display:none"></div>
             <p id="dropzone-text" style="margin: 0; text-align: center;">Drag & drop an image here or click to browse</p>
-            <p id="dropzone-subtext" style="font-size: 0.85rem; color: #64748b; margin-top: 8px; display: none;">AI is segmenting subjects with MobileSAM (~15-30s)...</p>
+            <p id="dropzone-subtext" style="font-size: 0.85rem; color: #64748b; margin-top: 8px; display: none;"></p>
         </label>
+        <label style="margin-top: 16px; color: #94a3b8; font-size: 0.85rem;">
+            Analysis mode
+            <select id="analysis-mode" style="margin-left: 8px; padding: 6px; border-radius: 6px; background: #242632; color: white; border: 1px solid rgba(255,255,255,0.15);">
+                <option value="fast">Fast foreground (recommended)</option>
+                <option value="quality">Quality multi-subject (MobileSAM)</option>
+            </select>
+        </label>
+        <label style="margin-top: 10px; color: #94a3b8; font-size: 0.85rem;">
+            Naming
+            <select id="label-mode" style="margin-left: 8px; padding: 6px; border-radius: 6px; background: #242632; color: white; border: 1px solid rgba(255,255,255,0.15);">
+                <option value="ai">AI caption + OCR</option>
+                <option value="ocr">OCR only</option>
+                <option value="basic">Fast basic names</option>
+            </select>
+        </label>
+        <label style="margin-top: 10px; color: #94a3b8; font-size: 0.85rem;">
+            Padding
+            <select id="padding-setting" style="margin-left: 8px; padding: 6px; border-radius: 6px; background: #242632; color: white; border: 1px solid rgba(255,255,255,0.15);">
+                <option value="0">None</option><option value="0.1" selected>10%</option><option value="0.2">20%</option>
+            </select>
+            Feather
+            <select id="feather-setting" style="margin-left: 4px; padding: 6px; border-radius: 6px; background: #242632; color: white; border: 1px solid rgba(255,255,255,0.15);">
+                <option value="1">Sharp</option><option value="5" selected>Soft</option><option value="9">Softer</option>
+            </select>
+        </label>
+        <button id="cancel-job" style="display:none; margin-top:16px; color:#fecaca; border-color:#7f1d1d;">Cancel analysis</button>
+        <button id="close-upload" style="display:none; margin-top:12px;">Back to current image</button>
+        <div style="margin-top:20px; width:400px; max-width:90vw;">
+            <button id="history-toggle" style="width:100%;">Recent jobs</button>
+            <div id="recent-jobs" style="display:none; margin-top:8px; text-align:left;"></div>
+        </div>
     </div>
 
 
@@ -211,7 +247,9 @@
             <button id="zoom-reset" title="Reset Zoom">100%</button>
             <button id="zoom-in" title="Zoom In">+</button>
             <div style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></div>
+            <button id="open-image" title="Open another image">Open Image</button>
             <button id="toggle-draw" title="Draw Bounding Box">Draw Box</button>
+            <button id="toggle-polygon" title="Draw a polygon mask">Draw Polygon</button>
             <button id="toggle-masks" class="active" title="Toggle Overlays">Masks</button>
             <button id="toggle-bg" class="active" title="Toggle Checkerboard">Checker BG</button>
         </div>
@@ -219,7 +257,7 @@
         <div class="canvas-wrapper checkerboard" id="canvas-wrapper">
             <div id="image-layer">
                 <!-- Main image goes here. We'll load test_image.jpg as a placeholder for now since the original didn't explicitly show the full image, but it's needed for the canvas. -->
-                <img id="main-image" src="/outputs/test_image.jpg" alt="Source" style="display:none;" />
+                <img id="main-image" src="" alt="Source" style="display:none;" />
                 <div id="masks-container"></div>
                 <div id="draw-box"></div>
             </div>
@@ -262,17 +300,21 @@
             <button class="submit-btn" id="submit-btn" onclick="submitSelection()">Extract Selected Subjects (Enter)</button>
         </div>
     </div>
-    
+
     <div id="done-screen">
         <div class="success-icon">✨</div>
         <h2 id="done-msg">Selection Submitted successfully.</h2>
         <p style="color:var(--text-muted); margin-top:10px;">You can now close this window.</p>
+        <a id="download-link" href="#" style="display:none; margin-top:16px; color:#67e8f9;">Download ZIP export</a>
+        <button id="done-open-image" style="margin-top:18px;">Open another image</button>
     </div>
 
 <script>
     let masksData = [];
     let selectedIds = new Set();
     let currentFilter = 'all';
+    let jobId = null;
+    let pollTimer = null;
     
     // Canvas State
     let scale = 1.0;
@@ -281,6 +323,8 @@
     
     // Draw State
     let drawMode = false;
+    let polygonMode = false;
+    let polygonPoints = [];
     let isDrawing = false;
     let startDrawX = 0, startDrawY = 0;
 
@@ -297,6 +341,16 @@
     const dropzoneText = document.getElementById('dropzone-text');
     const dropzoneSubtext = document.getElementById('dropzone-subtext');
     const uploadSpinner = document.getElementById('upload-spinner');
+    const analysisMode = document.getElementById('analysis-mode');
+    const labelMode = document.getElementById('label-mode');
+    const paddingSetting = document.getElementById('padding-setting');
+    const featherSetting = document.getElementById('feather-setting');
+    const cancelJobButton = document.getElementById('cancel-job');
+    const closeUploadButton = document.getElementById('close-upload');
+    const recentJobs = document.getElementById('recent-jobs');
+    const doneScreen = document.getElementById('done-screen');
+    const downloadLink = document.getElementById('download-link');
+    let uploadReturnView = 'curation';
 
     // Prevent default browser file-opening behavior
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -319,23 +373,97 @@
             e.target.value = ''; // Allow selecting the same file again
         }
     });
+    fileInput.addEventListener('cancel', closeUploadOverlay);
+
+    cancelJobButton.onclick = cancelJob;
+    document.getElementById('open-image').onclick = openAnotherImage;
+    document.getElementById('done-open-image').onclick = openAnotherImage;
+    closeUploadButton.onclick = closeUploadOverlay;
+    document.getElementById('history-toggle').onclick = async () => {
+        const visible = recentJobs.style.display !== 'none';
+        recentJobs.style.display = visible ? 'none' : 'block';
+        if (!visible) await loadHistory();
+    };
+
+    async function loadHistory() {
+        const res = await fetch('/api/jobs');
+        const data = await res.json();
+        recentJobs.innerHTML = '';
+        (data.jobs || []).forEach(job => {
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:8px; margin-top:6px; border:1px solid rgba(255,255,255,0.1); border-radius:6px; cursor:pointer;';
+            row.innerText = `${job.job_id} · ${job.status} · ${job.mode}`;
+            row.onclick = async () => {
+                jobId = job.job_id;
+                const result = await fetch(`/api/jobs/${jobId}`);
+                const details = await result.json();
+                if (details.status === 'ready') {
+                    masksData = details.masks || [];
+                    selectedIds = new Set(details.selected_ids || []);
+                    uploadOverlay.style.display = 'none';
+                    initCanvas(details.image_url);
+                } else if (details.status === 'queued' || details.status === 'running') {
+                    uploadOverlay.style.display = 'flex';
+                    pollJob();
+                } else if (details.status === 'completed') {
+                    showDone(details);
+                }
+            };
+            recentJobs.appendChild(row);
+            if (['failed', 'cancelled'].includes(job.status)) {
+                const retry = document.createElement('button');
+                retry.innerText = 'Retry';
+                retry.style.cssText = 'margin-top:4px; padding:4px 8px;';
+                retry.onclick = async (event) => {
+                    event.stopPropagation();
+                    jobId = job.job_id;
+                    await fetch(`/api/jobs/${jobId}/retry`, {method:'POST'});
+                    uploadOverlay.style.display = 'flex';
+                    pollJob();
+                };
+                row.appendChild(document.createElement('br'));
+                row.appendChild(retry);
+            }
+            if (['completed', 'failed', 'cancelled', 'ready'].includes(job.status)) {
+                const remove = document.createElement('button');
+                remove.innerText = 'Delete';
+                remove.style.cssText = 'margin-top:4px; padding:4px 8px; color:#fecaca;';
+                remove.onclick = async (event) => {
+                    event.stopPropagation();
+                    await fetch(`/api/jobs/${job.job_id}`, {method:'DELETE'});
+                    loadHistory();
+                };
+                row.appendChild(document.createElement('br'));
+                row.appendChild(remove);
+            }
+        });
+        if (!data.jobs || data.jobs.length === 0) recentJobs.innerText = 'No jobs yet.';
+    }
 
     async function handleUpload(file) {
         console.log("Uploading file:", file.name);
+        closeUploadButton.style.display = 'none';
         dropzoneText.innerText = "Analyzing image...";
         dropzoneSubtext.style.display = "block";
+        dropzoneSubtext.innerText = analysisMode.value === 'fast'
+            ? "Fast foreground analysis..."
+            : "Quality analysis with MobileSAM (~15-30s)...";
         uploadSpinner.style.display = "block";
         
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("mode", analysisMode.value);
+        formData.append("label_mode", labelMode.value);
+        formData.append("padding_ratio", paddingSetting.value);
+        formData.append("feather_kernel", featherSetting.value);
         
         try {
             const res = await fetch('/api/upload', { method: 'POST', body: formData });
             const data = await res.json();
-            if(res.ok && data.status === 'ok') {
-                masksData = data.masks || [];
-                uploadOverlay.style.display = 'none';
-                initCanvas(data.image_url);
+            if(res.ok && data.job_id) {
+                jobId = data.job_id;
+                cancelJobButton.style.display = 'inline-block';
+                await pollJob();
             } else {
                 throw new Error(data.detail || "Upload server error");
             }
@@ -344,6 +472,91 @@
             dropzoneText.innerText = "Error analyzing image. Click to try again.";
             dropzoneSubtext.style.display = "none";
             uploadSpinner.style.display = "none";
+            cancelJobButton.style.display = 'none';
+        }
+    }
+
+    function schedulePoll() {
+        if (pollTimer) clearTimeout(pollTimer);
+        pollTimer = setTimeout(pollJob, 700);
+    }
+
+    async function pollJob() {
+        if (!jobId) return;
+        try {
+            const res = await fetch(`/api/jobs/${jobId}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Unable to read job status');
+
+            dropzoneText.innerText = data.message || 'Working...';
+            dropzoneSubtext.style.display = 'block';
+            dropzoneSubtext.innerText = `${data.stage || 'working'} · ${data.progress || 0}%`;
+
+            if (data.status === 'queued' || data.status === 'running') {
+                cancelJobButton.style.display = 'inline-block';
+                schedulePoll();
+            } else if (data.status === 'ready') {
+                masksData = data.masks || [];
+                selectedIds = new Set(data.selected_ids || []);
+                cancelJobButton.style.display = 'none';
+                uploadOverlay.style.display = 'none';
+                initCanvas(data.image_url);
+                renderGrid();
+                updateCounter();
+            } else if (data.status === 'completed') {
+                cancelJobButton.style.display = 'none';
+                showDone(data);
+            } else if (data.status === 'failed' || data.status === 'cancelled') {
+                cancelJobButton.style.display = 'none';
+                dropzoneText.innerText = data.error || data.message || 'Job failed';
+                dropzoneSubtext.innerText = 'Choose another image or retry this job from Recent jobs.';
+                uploadSpinner.style.display = 'none';
+                document.getElementById('submit-btn').disabled = false;
+                document.getElementById('submit-btn').innerText = 'Extract Selected Subjects (Enter)';
+            }
+        } catch (e) {
+            console.error('Job polling error:', e);
+            dropzoneText.innerText = 'Unable to read job status.';
+            schedulePoll();
+        }
+    }
+
+    async function cancelJob() {
+        if (!jobId) return;
+        await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
+        pollJob();
+    }
+
+    function openAnotherImage() {
+        uploadReturnView = doneScreen.style.display === 'flex' ? 'done' : 'curation';
+        doneScreen.style.display = 'none';
+        uploadOverlay.style.display = 'flex';
+        closeUploadButton.style.display = jobId ? 'inline-block' : 'none';
+        cancelJobButton.style.display = 'none';
+        uploadSpinner.style.display = 'none';
+        dropzoneText.innerText = 'Choose another image';
+        dropzoneSubtext.style.display = 'block';
+        dropzoneSubtext.innerText = 'Your current job remains available in Recent jobs.';
+        fileInput.click();
+    }
+
+    function closeUploadOverlay() {
+        if (uploadSpinner.style.display === 'block') return;
+        uploadOverlay.style.display = 'none';
+        closeUploadButton.style.display = 'none';
+        if (uploadReturnView === 'done') doneScreen.style.display = 'flex';
+    }
+
+    function showDone(data) {
+        uploadOverlay.style.display = 'none';
+        doneScreen.style.display = 'flex';
+        const msg = document.getElementById('done-msg');
+        msg.innerHTML = data.contact_sheet
+            ? `Extraction complete!<br><br><img src="${data.contact_sheet}" style="max-width:80%; max-height:60vh; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">`
+            : 'Extraction complete!';
+        if (data.download_url) {
+            downloadLink.href = data.download_url;
+            downloadLink.style.display = 'inline-block';
         }
     }
 
@@ -374,64 +587,27 @@
         try {
             const res = await fetch('/api/masks');
             const data = await res.json();
+            jobId = data.job_id || null;
             masksData = data.masks || [];
             if(masksData.length === 0) {
                 // Standalone mode, wait for upload
                 uploadOverlay.style.display = 'flex';
+                loadHistory();
                 return;
             } else {
                 uploadOverlay.style.display = 'none';
             }
-            
-            // CLI Mode
-            mainImg.src = "/outputs/source.jpg"; // Wait, in CLI mode, maybe source.jpg is not there? 
-            // The original logic didn't assume a specific image, but let's see. 
-            // Actually, we'll try to load it. If it fails, fallback.
-            mainImg.src = "/outputs/" + masksData[0].thumb_file.split('/')[0] + "/source.jpg";
-            mainImg.onload = () => {
-                mainImg.style.display = 'block';
-                imageLayer.style.width = mainImg.naturalWidth + 'px';
-                imageLayer.style.height = mainImg.naturalHeight + 'px';
-                centerCanvas();
-                renderOverlays();
-            };
-            mainImg.onerror = () => {
-                imageLayer.style.width = '1024px';
-                imageLayer.style.height = '1024px';
-                imageLayer.style.background = '#2a2a2a';
-                centerCanvas();
-                renderOverlays();
-            };
-            */
 
-
-/*
-        try {
-            const res = await fetch('/api/masks');
-            const data = await res.json();
-            masksData = data.masks || [];
-            
-            // Try to load a main image, if available, or just mock canvas size.
-            // Using a generic size if image doesn't load.
-            mainImg.src = "/outputs/test_image.jpg";
-            mainImg.onload = () => {
-                mainImg.style.display = 'block';
-                imageLayer.style.width = mainImg.naturalWidth + 'px';
-                imageLayer.style.height = mainImg.naturalHeight + 'px';
-                centerCanvas();
-                renderOverlays();
-            };
-            mainImg.onerror = () => {
-                // Mock canvas size if image missing
-                imageLayer.style.width = '1024px';
-                imageLayer.style.height = '1024px';
-                imageLayer.style.background = '#2a2a2a';
-                centerCanvas();
-                renderOverlays();
-            };
-            
-            */
-
+            initCanvas(data.image_url);
+            selectedIds = new Set(data.selected_ids || []);
+            renderGrid();
+            updateCounter();
+        } catch (e) {
+            console.error('Initialization error:', e);
+            uploadOverlay.style.display = 'flex';
+            dropzoneText.innerText = 'Unable to connect to the local server.';
+        }
+    }
 
     // Canvas Interactions
     function updateTransform() {
@@ -467,6 +643,10 @@
     }, {passive: false});
 
     wrapper.addEventListener('mousedown', (e) => {
+        if (polygonMode) {
+            e.preventDefault();
+            return;
+        }
         if (drawMode) {
             isDrawing = true;
             const rect = wrapper.getBoundingClientRect();
@@ -482,6 +662,42 @@
             isPanning = true;
             startPanX = e.clientX - panX;
             startPanY = e.clientY - panY;
+        }
+    });
+
+    wrapper.addEventListener('click', (e) => {
+        if (!polygonMode) return;
+        const rect = wrapper.getBoundingClientRect();
+        polygonPoints.push([
+            Math.round((e.clientX - rect.left - panX) / scale),
+            Math.round((e.clientY - rect.top - panY) / scale),
+        ]);
+        drawBoxEl.style.display = 'block';
+        drawBoxEl.style.left = `${polygonPoints[0][0]}px`;
+        drawBoxEl.style.top = `${polygonPoints[0][1]}px`;
+        drawBoxEl.style.width = '8px';
+        drawBoxEl.style.height = '8px';
+    });
+
+    wrapper.addEventListener('dblclick', async (e) => {
+        if (!polygonMode || polygonPoints.length < 3) return;
+        e.preventDefault();
+        try {
+            const res = await fetch(`/api/jobs/${jobId}/prompt_polygon`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({points: polygonPoints})
+            });
+            const data = await res.json();
+            if (res.ok && data.mask) {
+                masksData.push(data.mask);
+                selectedIds.add(data.mask.id);
+                renderOverlays(); renderGrid(); updateCounter();
+            } else {
+                alert(data.detail || 'Polygon failed');
+            }
+        } finally {
+            polygonPoints = [];
+            drawBoxEl.style.display = 'none';
         }
     });
 
@@ -524,7 +740,7 @@
             
             if (w > 10 && h > 10) {
                 try {
-                    const res = await fetch('/api/prompt_box', {
+                    const res = await fetch(`/api/jobs/${jobId}/prompt_box`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({bbox: [Math.round(x), Math.round(y), Math.round(w), Math.round(h)]})
@@ -549,8 +765,19 @@
     
     document.getElementById('toggle-draw').onclick = (e) => {
         drawMode = !drawMode;
+        polygonMode = false;
+        polygonPoints = [];
         e.target.classList.toggle('active', drawMode);
+        document.getElementById('toggle-polygon').classList.remove('active');
         wrapper.classList.toggle('draw-mode', drawMode);
+    };
+    document.getElementById('toggle-polygon').onclick = (e) => {
+        polygonMode = !polygonMode;
+        drawMode = false;
+        polygonPoints = [];
+        e.target.classList.toggle('active', polygonMode);
+        document.getElementById('toggle-draw').classList.remove('active');
+        wrapper.classList.toggle('draw-mode', polygonMode);
     };
     
     let showMasks = true;
@@ -609,6 +836,26 @@
         updateCounter();
     }
 
+    async function removeMask(id) {
+        const mask = masksData.find(item => item.id === id);
+        if (!mask) return;
+        if (!confirm(`Remove ${id} from this curation?`)) return;
+
+        try {
+            const res = await fetch(`/api/jobs/${jobId}/masks/${encodeURIComponent(id)}`, {method: 'DELETE'});
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Could not remove mask');
+            masksData = masksData.filter(item => item.id !== id);
+            selectedIds.delete(id);
+            renderOverlays();
+            renderGrid();
+            updateCounter();
+        } catch (error) {
+            console.error(error);
+            alert(error.message || 'Could not remove mask');
+        }
+    }
+
     function hoverMask(id, state) {
         const card = document.getElementById(`card-${id}`);
         const overlay = document.getElementById(`overlay-${id}`);
@@ -626,6 +873,17 @@
         masksData.forEach(m => {
             if (m.bbox) {
                 const [x, y, w, h] = m.bbox;
+                if (m.mask_url) {
+                    const maskImage = document.createElement('img');
+                    maskImage.className = 'mask-image';
+                    maskImage.src = m.mask_url;
+                    maskImage.alt = '';
+                    maskImage.style.left = '0px';
+                    maskImage.style.top = '0px';
+                    maskImage.style.width = imageLayer.style.width;
+                    maskImage.style.height = imageLayer.style.height;
+                    masksContainer.appendChild(maskImage);
+                }
                 const div = document.createElement('div');
                 div.className = 'mask-overlay' + (selectedIds.has(m.id) ? ' selected' : '');
                 div.id = `overlay-${m.id}`;
@@ -681,12 +939,24 @@
             card.onmouseleave = () => hoverMask(m.id, false);
             
             card.innerHTML = `
-                <img src="/outputs/${m.thumb_file}" class="card-thumb checker-bg" loading="lazy" onerror="this.src=''; this.style.background='#333';">
+                <img src="${m.thumb_url || ('/outputs/' + m.thumb_file)}" class="card-thumb checker-bg" loading="lazy" onerror="this.src=''; this.style.background='#333';">
                 <div class="card-info">
                     <span class="card-title">${m.id}</span>
                     Area: ${(m.area/1000).toFixed(1)}k
                 </div>
             `;
+            if (m.segmentation_mode === 'manual_box' || m.segmentation_mode === 'manual_polygon') {
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.innerText = 'Remove drawn mask';
+                removeButton.title = 'Remove this manually drawn mask';
+                removeButton.style.cssText = 'margin: 0 10px 10px; padding: 5px 8px; color: #fecaca; border-color: #7f1d1d;';
+                removeButton.onclick = (event) => {
+                    event.stopPropagation();
+                    removeMask(m.id);
+                };
+                card.appendChild(removeButton);
+            }
             grid.appendChild(card);
         });
     }
@@ -727,10 +997,10 @@
     async function submitSelection() {
         if(selectedIds.size === 0) return alert("Select at least one subject.");
         const btn = document.getElementById('submit-btn');
-        btn.innerText = 'Refining edges & AI labeling...'; btn.disabled = true;
+        btn.innerText = 'Queued for extraction...'; btn.disabled = true;
         
         try {
-            const res = await fetch('/api/submit', {
+            const res = await fetch(`/api/jobs/${jobId}/select`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -740,18 +1010,17 @@
             });
             const data = await res.json();
             if(res.ok) {
-                document.getElementById('done-screen').style.display = 'flex';
-                if(data.contact_sheet) {
-                    const msg = document.getElementById('done-msg');
-                    msg.innerHTML = "Extraction complete!<br><br><img src='" + data.contact_sheet + "' style='max-width:80%; max-height: 60vh; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);'>";
-                }
+                uploadOverlay.style.display = 'flex';
+                dropzoneText.innerText = 'Processing selected subjects...';
+                dropzoneSubtext.style.display = 'block';
+                cancelJobButton.style.display = 'inline-block';
+                pollJob();
             } else {
-                alert("Submit failed");
-                btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
+                throw new Error(data.detail || 'Submit failed');
             }
         } catch(e) {
             console.error(e);
-            alert("Submit failed");
+            alert(e.message || "Submit failed");
             btn.innerText = 'Extract Selected Subjects (Enter)'; btn.disabled = false;
         }
     }

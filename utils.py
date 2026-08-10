@@ -3,8 +3,14 @@ import urllib.request
 import yaml
 from pathlib import Path
 
-def load_config(config_path="config.yaml"):
-    with open(config_path, 'r') as f:
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def load_config(config_path=None):
+    path = Path(config_path) if config_path else BASE_DIR / "config.yaml"
+    if not path.is_absolute() and config_path is None:
+        path = BASE_DIR / path
+    with open(path, 'r') as f:
         return yaml.safe_load(f)
 
 def download_model(url, save_path):

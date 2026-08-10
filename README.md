@@ -13,6 +13,7 @@ A local AI tool that takes any photograph containing stickers, graffiti, signage
 - **Smart Automated Naming**: Multimodal VLM (`moondream2`) + OCR (`pytesseract`) + optional LLM (`deepseek-v4-flash`) pipeline to generate clean, descriptive filenames automatically.
 - **Contact Sheet Generation**: Automatically compiles an overview grid image of all extracted subjects for rapid curation.
 - **Sequential Memory Management**: Unloads unused neural net models between pipeline stages to fit smoothly within hardware memory limits (e.g., 8GB Apple Silicon).
+- **Fast/Quality Analysis Modes**: Fast mode uses lightweight foreground extraction for quick single-subject results; Quality mode uses MobileSAM for multiple candidate subjects.
 
 ---
 
@@ -37,7 +38,7 @@ A local AI tool that takes any photograph containing stickers, graffiti, signage
  5. LABEL       ───► moondream2 (caption) + Tesseract (OCR) + DeepSeek API (clean slug)
                  │
                  ▼
-[ Output Directory: PNGs + Contact Sheet + manifest.json ]
+[ Background Job Queue ] ───► Progress / Cancel / Retry / History / ZIP Export
 ```
 
 ---
@@ -82,13 +83,41 @@ Simply launch `main.py` without arguments:
 ```bash
 python main.py
 ```
+
+On macOS/Linux, you can also use:
+
+```bash
+./start.sh
+```
 This automatically opens **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser. Drag and drop any photo to begin!
+
+The uploader defaults to **Fast foreground** analysis. Choose **Quality multi-subject** in the upload screen when you need MobileSAM candidate masks.
+
+The upload screen also supports AI/OCR/basic naming, box and polygon prompts, recent-job history, retry/cancel, and ZIP export. The server keeps jobs under `outputs/` and recovers completed manifests when restarted.
 
 ### Option 2: Command Line Path Mode
 Pass an image path directly:
 
 ```bash
 python main.py /path/to/your/image.jpg
+```
+
+Use `--mode quality` for MobileSAM or `--mode fast` for lightweight foreground extraction:
+
+```bash
+python main.py /path/to/your/image.jpg --mode quality
+```
+
+For batch processing:
+
+```bash
+python auto_extract.py /path/to/images --mode fast --label-mode basic
+```
+
+Run the lightweight test suite with:
+
+```bash
+python -m unittest discover -s tests
 ```
 
 ---

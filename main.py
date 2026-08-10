@@ -1,9 +1,7 @@
 import os
-import time
 import json
 import argparse
-from pathlib import Path
-from PIL import Image
+import uuid
 
 from segment import run_segmentation
 from curate_server import start_server
@@ -11,57 +9,24 @@ from extract import extract_subjects
 from refine import refine_edges
 from label import label_subjects
 from utils import load_config
-
-def create_contact_sheet(final_data, output_dir, output_filename="contact_sheet.png"):
-    if not final_data:
-        return
-        
-    print("Generating contact sheet...")
-    # Calculate grid size
-    n = len(final_data)
-    cols = int(n ** 0.5)
-    rows = (n + cols - 1) // cols
-    
-    thumb_size = 200
-    padding = 20
-    
-    sheet_w = cols * thumb_size + (cols + 1) * padding
-    sheet_h = rows * thumb_size + (rows + 1) * padding
-    
-    sheet = Image.new("RGBA", (sheet_w, sheet_h), (30, 30, 30, 255))
-    
-    for i, item in enumerate(final_data):
-        row = i // cols
-        col = i % cols
-        
-        x = padding + col * (thumb_size + padding)
-        y = padding + row * (thumb_size + padding)
-        
-        img_path = os.path.join(output_dir, item['filename'])
-        try:
-            img = Image.open(img_path).convert("RGBA")
-            img.thumbnail((thumb_size, thumb_size))
-            
-            # Center in the grid slot
-            offset_x = x + (thumb_size - img.width) // 2
-            offset_y = y + (thumb_size - img.height) // 2
-            
-            # Create a checkerboard background for transparency visibility
-            bg = Image.new("RGBA", (img.width, img.height), (100, 100, 100, 255))
-            sheet.paste(bg, (offset_x, offset_y))
-            sheet.paste(img, (offset_x, offset_y), mask=img)
-        except Exception as e:
-            print(f"Error adding {item['filename']} to contact sheet: {e}")
-            
-    sheet.save(os.path.join(output_dir, output_filename))
+from contact_sheet import create_contact_sheet
 
 def main():
     parser = argparse.ArgumentParser(description="Subject Extractor")
     parser.add_argument("image", nargs="?", help="Path to input image")
     parser.add_argument("--output", default="outputs", help="Base output directory")
     parser.add_argument("--device", help="Device override (auto, cpu, mps, cuda)", default=None)
+    parser.add_argument(
+        "--mode",
+        choices=["fast", "quality"],
+        default=None,
+        help="Segmentation mode (fast foreground mask or quality MobileSAM masks)",
+    )
     parser.add_argument("--no-ui", action="store_true", help="Skip curation UI and extract all")
     parser.add_argument("--api-key", help="DeepSeek API key", default=None)
+    parser.add_argument("--label-mode", choices=["ai", "ocr", "basic"], default="ai")
+    parser.add_argument("--padding", type=float, default=0.1, help="Padding ratio around each subject")
+    parser.add_argument("--feather", type=int, default=5, help="Alpha feather kernel size")
     args = parser.parse_args()
     
     if not args.image:
@@ -69,8 +34,9 @@ def main():
         import webbrowser
         import uvicorn
         from curate_server import app
-        webbrowser.open("http://127.0.0.1:8000")
-        uvicorn.run(app, host="127.0.0.1", port=8000)
+        server_port = int(os.environ.get("EXTRACTOR_PORT", load_config().get("ui", {}).get("port", 8000)))
+        webbrowser.open(f"http://127.0.0.1:{server_port}")
+        uvicorn.run(app, host="127.0.0.1", port=server_port)
         return
         
     if not os.path.exists(args.image):
@@ -78,7 +44,7 @@ def main():
         return
         
     # Create unique run directory
-    run_id = time.strftime("%Y%m%d_%H%M%S")
+    run_id = uuid.uuid4().hex[:12]
     output_dir = os.path.join(args.output, run_id)
     os.makedirs(output_dir, exist_ok=True)
     
@@ -87,6 +53,8 @@ def main():
     print(f"Output Directory: {output_dir}")
     if args.device:
         print(f"Device Override: {args.device}")
+    if args.mode:
+        print(f"Segmentation Mode: {args.mode}")
         
     config = load_config()
     if args.device:
@@ -101,7 +69,7 @@ def main():
         # we'll save it to a temp env var and have get_device check it.
         if args.device:
             os.environ['SUBJECT_EXTRACTOR_DEVICE'] = args.device
-        masks_data = run_segmentation(args.image, output_dir)
+        masks_data = run_segmentation(args.image, output_dir, mode=args.mode)
     except Exception as e:
         print(f"Error during segmentation: {e}")
         return
@@ -119,8 +87,14 @@ def main():
     else:
         try:
             import webbrowser
-            webbrowser.open("http://127.0.0.1:8000")
-            selected_ids, ui_api_key = start_server(output_dir, masks_data, port=8000)
+            server_port = int(os.environ.get("EXTRACTOR_PORT", config.get("ui", {}).get("port", 8000)))
+            webbrowser.open(f"http://127.0.0.1:{server_port}")
+            selected_ids, ui_api_key, masks_data = start_server(
+                output_dir, masks_data,
+                port=server_port,
+                source_path=args.image,
+                mode=args.mode or config.get("segmentation", {}).get("mode", "fast")
+            )
             if ui_api_key:
                 api_key = ui_api_key
         except Exception as e:
@@ -134,7 +108,10 @@ def main():
     # Stage 4: Extract
     print("\n--- STAGE 4: EXTRACT ---")
     try:
-        extracted_data = extract_subjects(args.image, selected_ids, masks_data, output_dir)
+        extracted_data = extract_subjects(
+            args.image, selected_ids, masks_data, output_dir,
+            padding_ratio=args.padding, feather_kernel=args.feather,
+        )
     except Exception as e:
         print(f"Error during extraction: {e}")
         return
@@ -150,7 +127,9 @@ def main():
     # Stage 6: Label (moondream + DeepSeek API)
     print("\n--- STAGE 6: LABEL ---")
     try:
-        final_data = label_subjects(refined_data, output_dir, api_key=api_key)
+        final_data = label_subjects(
+            refined_data, output_dir, api_key=api_key, label_mode=args.label_mode
+        )
     except Exception as e:
         print(f"Error during labeling: {e}")
         return
@@ -159,6 +138,11 @@ def main():
     print("\n--- FINALIZING ---")
     manifest = {
         "source_image": os.path.abspath(args.image),
+        "app_version": "0.2.0",
+        "mode": args.mode or config.get("segmentation", {}).get("mode", "fast"),
+        "label_mode": args.label_mode,
+        "padding_ratio": args.padding,
+        "feather_kernel": args.feather,
         "subjects": final_data
     }
     

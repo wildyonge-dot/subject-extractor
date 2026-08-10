@@ -4,6 +4,9 @@ hardware:
   device: "auto"
   batch_size: 1
 
+segmentation:
+  mode: "fast" # "fast" uses rembg/u2netp; "quality" uses MobileSAM
+
 ui:
   theme: "dark"
   port: 8000

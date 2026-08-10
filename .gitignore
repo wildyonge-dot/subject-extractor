@@ -15,8 +15,7 @@ __pycache__/
 *.env.local
 
 # ML Models & Output data
-models/*.pt
-models/*.onnx
+models/
 outputs/
 
 # Test assets & sample files
