@@ -194,14 +194,14 @@
 </head>
 <body>
 
-    <input type="file" id="file-input" style="display:none" accept="image/*">
+    <input type="file" id="file-input" style="opacity: 0; width: 0.1px; height: 0.1px; position: absolute; z-index: -1;" accept="image/*">
     <div id="upload-overlay">
         <h1 style="margin-bottom: 20px;">Upload Image to Begin</h1>
-        <div class="dropzone" id="dropzone">
+        <label class="dropzone" id="dropzone" for="file-input">
             <div class="spinner" id="upload-spinner" style="display:none"></div>
             <p id="dropzone-text" style="margin: 0; text-align: center;">Drag & drop an image here or click to browse</p>
             <p id="dropzone-subtext" style="font-size: 0.85rem; color: #64748b; margin-top: 8px; display: none;">AI is segmenting subjects with MobileSAM (~15-30s)...</p>
-        </div>
+        </label>
     </div>
 
 
@@ -302,8 +302,6 @@
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         window.addEventListener(eventName, e => e.preventDefault(), false);
     });
-
-    dropzone.onclick = () => fileInput.click();
 
     dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
     dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
