@@ -1,0 +1,13 @@
+# Subject Extractor Configuration
+
+model_paths:
+  mobilesam: "./models/mobile_sam.pt"
+
+thresholds:
+  min_mask_area_ratio: 0.005 # Drop masks smaller than 0.5% of total area
+  max_mask_area_ratio: 0.85  # Drop masks larger than 85% (likely background)
+  nms_iou: 0.8               # IoU threshold for overlapping/duplicate masks
+
+api:
+  deepseek_model: "deepseek-v4-flash"
+  # Set DEEPSEEK_API_KEY in .env

@@ -1,0 +1,31 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment & secrets
+.env
+*.env.local
+
+# ML Models & Output data
+models/*.pt
+models/*.onnx
+outputs/
+
+# Test assets & sample files
+test_image.jpg
+stickers.jpg
+demo_ui.py
+
+# System files & IDEs
+.DS_Store
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subject Extractor - Curate</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --accent-color: #bb86fc;
+            --card-bg: #1e1e1e;
+            --selected-border: #bb86fc;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 2rem;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        h1 {
+            margin: 0;
+            font-weight: 600;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+        }
+        button {
+            background-color: var(--accent-color);
+            color: #000;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button.secondary {
+            background-color: transparent;
+            color: var(--accent-color);
+            border: 1px solid var(--accent-color);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+        }
+        .card.selected {
+            border-color: var(--selected-border);
+        }
+        .card img {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            background-color: #000;
+            /* Show transparency grid behind */
+            background-image: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        .card-info {
+            padding: 0.75rem;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        .badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--accent-color);
+            color: #000;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .card.selected .badge {
+            display: flex;
+        }
+        #status-message {
+            margin-top: 2rem;
+            font-size: 1.2rem;
+            color: #4caf50;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Select Subjects to Extract</h1>
+        <div class="controls" style="align-items: center; gap: 1.5rem;">
+            <div>
+                <label for="api-key" style="font-size: 0.9rem; margin-right: 0.5rem;">DeepSeek API Key (optional):</label>
+                <input type="password" id="api-key" placeholder="sk-..." style="padding: 0.5rem; border-radius: 4px; border: 1px solid #555; background: #222; color: #fff;">
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button class="secondary" onclick="toggleAll()">Toggle All</button>
+                <button onclick="submitSelection()">Extract Selected</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="grid" id="grid">
+        <!-- Cards will be populated here -->
+    </div>
+    
+    <div id="status-message"></div>
+
+    <script>
+        let masks = [];
+        const selectedIds = new Set();
+
+        async function fetchMasks() {
+            try {
+                const response = await fetch('/api/masks');
+                const data = await response.json();
+                masks = data.masks;
+                renderGrid();
+            } catch (error) {
+                console.error("Error fetching masks:", error);
+            }
+        }
+
+        function toggleSelection(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            const card = document.getElementById(`card-${id}`);
+            if (card) {
+                card.classList.toggle('selected');
+            }
+        }
+
+        function toggleAll() {
+            const allSelected = selectedIds.size === masks.length;
+            if (allSelected) {
+                selectedIds.clear();
+            } else {
+                masks.forEach(m => selectedIds.add(m.id));
+            }
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            
+            masks.forEach(mask => {
+                const isSelected = selectedIds.has(mask.id);
+                const card = document.createElement('div');
+                card.className = `card ${isSelected ? 'selected' : ''}`;
+                card.id = `card-${mask.id}`;
+                card.onclick = () => toggleSelection(mask.id);
+                
+                // Area percentage calculation (rough estimate if we pass image area, otherwise just raw)
+                
+                card.innerHTML = `
+                    <div class="badge">✓</div>
+                    <img src="/outputs/${mask.thumb_file}" alt="Mask ${mask.id}">
+                    <div class="card-info">
+                        <span>${mask.id}</span>
+                        <span style="opacity: 0.6">Area: ${Math.round(mask.area)}</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function submitSelection() {
+            if (selectedIds.size === 0) {
+                alert("Please select at least one subject.");
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        selected_ids: Array.from(selectedIds),
+                        api_key: document.getElementById('api-key').value.trim() || null
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'ok') {
+                    document.getElementById('grid').style.display = 'none';
+                    document.querySelector('.controls').style.display = 'none';
+                    const msg = document.getElementById('status-message');
+                    msg.textContent = result.message;
+                    msg.style.display = 'block';
+                }
+            } catch (error) {
+                console.error("Error submitting:", error);
+                alert("Failed to submit selection.");
+            }
+        }
+
+        // Initialize
+        fetchMasks();
+    </script>
+</body>
+</html>

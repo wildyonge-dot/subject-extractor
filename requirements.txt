@@ -1,0 +1,33 @@
+# PyTorch (MPS support recommended)
+torch>=2.2.0
+torchvision>=0.17.0
+numpy<2.0.0
+
+# MobileSAM
+git+https://github.com/ChaoningZhang/MobileSAM.git
+timm
+
+# Image Ops
+opencv-python
+Pillow
+
+# Edge Refinement
+rembg
+onnxruntime
+
+# Vision-Language Model
+transformers
+einops
+
+# OCR
+pytesseract
+
+# Web UI
+fastapi
+uvicorn
+
+# API & Config
+python-dotenv
+openai
+pyyaml
+click
