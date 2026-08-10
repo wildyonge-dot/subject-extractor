@@ -1,5 +1,13 @@
 # Subject Extractor Configuration
 
+hardware:
+  device: "auto"
+  batch_size: 1
+
+ui:
+  theme: "dark"
+  port: 8000
+
 model_paths:
   mobilesam: "./models/mobile_sam.pt"
 

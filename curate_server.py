@@ -8,7 +8,7 @@ import uvicorn
 import threading
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI()
 
@@ -37,6 +37,10 @@ def get_masks():
 @app.post("/api/submit")
 def submit_selection(selection: Selection):
     global SELECTED_IDS, API_KEY
+    if selection.api_key and len(selection.api_key.strip()) < 5:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid API key format")
+        
     SELECTED_IDS = selection.selected_ids
     API_KEY = selection.api_key
     SELECTION_EVENT.set()
@@ -49,7 +53,7 @@ def index():
 
 def start_server(output_dir, masks_data, port=8000):
     global SESSION_DIR, MASKS_DATA, SELECTED_IDS, API_KEY
-    SESSION_DIR = output_dir
+    SESSION_DIR = Path(output_dir).resolve()
     MASKS_DATA = masks_data
     SELECTED_IDS = []
     API_KEY = None
@@ -57,7 +61,7 @@ def start_server(output_dir, masks_data, port=8000):
     
     # Mount the static and outputs directories
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-    app.mount("/outputs", StaticFiles(directory=output_dir), name="outputs")
+    app.mount("/outputs", StaticFiles(directory=str(SESSION_DIR)), name="outputs")
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
     server = uvicorn.Server(config)
@@ -81,7 +85,7 @@ def start_server(output_dir, masks_data, port=8000):
     import time
     time.sleep(1)
     
-    # We can't cleanly shutdown uvicorn from another thread easily in some versions,
-    # but since this process will exit or just stop serving as the script continues,
-    # it's acceptable for a CLI tool.
+    # Cleanly shutdown the server
+    server.should_exit = True
+    
     return SELECTED_IDS, API_KEY

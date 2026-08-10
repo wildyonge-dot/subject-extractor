@@ -24,7 +24,7 @@ def setup_mobilesam(config):
     url = "https://github.com/ChaoningZhang/MobileSAM/raw/master/weights/mobile_sam.pt"
     download_model(url, model_path)
     
-    device = get_device()
+    device = get_device(config)
     print(f"Loading MobileSAM on device: {device}")
     
     model_type = "vit_t"
@@ -138,8 +138,11 @@ def run_segmentation(image_path, output_dir):
             "area": mask_data['area']
         })
         
-    # We clear the model from memory by letting it go out of scope,
-    # but torch may hold onto cached memory, so we empty the cache if we used cuda or mps
+    import gc
+    del mask_generator
+    gc.collect()
+
+    # Empty torch cache if we used cuda or mps
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
     elif torch.cuda.is_available():

@@ -15,6 +15,35 @@ def download_model(url, save_path):
         print("Download complete.")
     return save_path
 
-def get_device():
-    # Temporarily force CPU to avoid MPS deadlock/hang in MobileSAM
+def get_device(config=None):
+    device_override = "auto"
+    env_device = os.environ.get('SUBJECT_EXTRACTOR_DEVICE')
+    if env_device:
+        device_override = env_device
+    elif config and 'hardware' in config and 'device' in config['hardware']:
+        device_override = config['hardware']['device'].lower()
+    
+    if device_override == "cpu":
+        return "cpu"
+    
+    import torch
+    
+    if device_override in ["mps", "auto"]:
+        if torch.backends.mps.is_available():
+            try:
+                # Test MPS initialization
+                torch.zeros(1).to("mps")
+                return "mps"
+            except Exception as e:
+                print(f"MPS initialization failed: {e}. Falling back to CPU.")
+    
+    if device_override in ["cuda", "auto"]:
+        if torch.cuda.is_available():
+            try:
+                # Test CUDA initialization
+                torch.zeros(1).to("cuda")
+                return "cuda"
+            except Exception as e:
+                print(f"CUDA initialization failed: {e}. Falling back to CPU.")
+                
     return "cpu"
